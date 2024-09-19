@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
+use App\Models\Subtask;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -13,29 +14,33 @@ class TaskController extends Controller
         $query = Task::query();
 
         if ($request->has('status')) {
-            $status = $request->status === 'completed';
-            $query->where('is_completed', $status);
+            $query->where('status', $request->status);
         }
 
         if ($request->has('due')) {
             $now = now();
             if ($request->due === 'overdue') {
-                $query->where('deadline', '<', $now)->where('is_completed', false);
+                $query->where('deadline', '<', $now)->where('status', '!=', 'completed');
             } elseif ($request->due === 'upcoming') {
-                $query->where('deadline', '>', $now)->where('is_completed', false);
+                $query->where('deadline', '>', $now)->where('status', '!=', 'completed');
             }
         }
 
-        return $query->with('subtasks')->get();
-    }
+        $tasks = $query->with('subtasks')->get();
 
+        return $tasks->map(function ($task) {
+            $task->progress = $task->progress;
+            return $task;
+        });
+    }
 
     public function store(Request $request)
     {
         $validatedData = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'deadline' => 'nullable|date_format:Y-m-d\TH:i:s\Z',
+            'deadline' => 'nullable|date',
+            'subtasks' => 'nullable|array',
         ]);
 
         if (isset($validatedData['deadline'])) {
@@ -43,12 +48,28 @@ class TaskController extends Controller
         }
 
         $task = Task::create($validatedData);
+
+        if (isset($validatedData['subtasks'])) {
+            foreach ($validatedData['subtasks'] as $subtaskData) {
+                $task->subtasks()->create([
+                    'title' => $subtaskData['title'],
+                    'is_completed' => $subtaskData['is_completed'] ?? false,
+                ]);
+            }
+        }
+
+        $task->load('subtasks');
+        $task->updateStatus();
+        $task->progress = $task->progress;
+
         return response()->json($task, 201);
     }
 
     public function show(Task $task)
     {
-        return $task->load('subtasks');
+        $task->load('subtasks');
+        $task->progress = $task->progress;
+        return $task;
     }
 
     public function update(Request $request, Task $task)
@@ -56,8 +77,9 @@ class TaskController extends Controller
         $validatedData = $request->validate([
             'title' => 'string|max:255',
             'description' => 'nullable|string',
-            'deadline' => 'nullable|date_format:Y-m-d\TH:i:s\Z',
+            'deadline' => 'nullable|date',
             'is_completed' => 'boolean',
+            'subtasks' => 'nullable|array',
         ]);
 
         if (isset($validatedData['deadline'])) {
@@ -66,11 +88,39 @@ class TaskController extends Controller
 
         $task->update($validatedData);
 
-        if ($task->subtasks()->count() > 0 && $task->subtasks()->where('is_completed', false)->count() === 0) {
-            $task->update(['is_completed' => true]);
+        if (isset($validatedData['subtasks'])) {
+            $existingSubtaskIds = $task->subtasks->pluck('id')->toArray();
+            $updatedSubtaskIds = [];
+
+            foreach ($validatedData['subtasks'] as $subtaskData) {
+                if (isset($subtaskData['id'])) {
+                    $subtask = Subtask::find($subtaskData['id']);
+                    if ($subtask) {
+                        $subtask->update([
+                            'title' => $subtaskData['title'],
+                            'is_completed' => $subtaskData['is_completed'] ?? false,
+                        ]);
+                        $updatedSubtaskIds[] = $subtask->id;
+                    }
+                } else {
+                    $newSubtask = $task->subtasks()->create([
+                        'title' => $subtaskData['title'],
+                        'is_completed' => $subtaskData['is_completed'] ?? false,
+                    ]);
+                    $updatedSubtaskIds[] = $newSubtask->id;
+                }
+            }
+
+
+            $subtasksToDelete = array_diff($existingSubtaskIds, $updatedSubtaskIds);
+            Subtask::destroy($subtasksToDelete);
         }
 
-        return response()->json($task->load('subtasks'));
+        $task->load('subtasks');
+        $task->updateStatus();
+        $task->progress = $task->progress;
+
+        return response()->json($task);
     }
 
     public function destroy(Task $task)

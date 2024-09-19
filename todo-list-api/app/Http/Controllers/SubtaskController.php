@@ -20,6 +20,7 @@ class SubtaskController extends Controller
         ]);
 
         $subtask = $task->subtasks()->create($validatedData);
+        $task->updateStatus();
         return response()->json($subtask, 201);
     }
 
@@ -36,12 +37,15 @@ class SubtaskController extends Controller
         ]);
 
         $subtask->update($validatedData);
+        $subtask->task->updateStatus();
         return response()->json($subtask);
     }
 
     public function destroy(Subtask $subtask)
     {
+        $task = $subtask->task;
         $subtask->delete();
+        $task->updateStatus();
         return response()->json(null, 204);
     }
 }
