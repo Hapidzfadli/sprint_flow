@@ -1,6 +1,7 @@
 # Sprint Flow
 
 Sprint Flow adalah aplikasi manajemen tugas yang dirancang untuk membantu individu dan tim mengelola proyek dan tugas dengan efisien. Aplikasi ini dikembangkan sebagai bagian dari studi kasus untuk posisi Full Stack Engineer.
+![image](https://github.com/user-attachments/assets/4146d24b-8abb-4ceb-98ee-0e332a6bfa68)
 
 ## Fitur
 
@@ -84,6 +85,7 @@ Sprint Flow adalah aplikasi manajemen tugas yang dirancang untuk membantu indivi
 6. Tugas akan otomatis berpindah kolom sesuai dengan statusnya
 
 ## Struktur Database (ERD)
+![Untitled(4)](https://github.com/user-attachments/assets/9777ab38-471f-4f1b-9fa5-18266644ca41)
 
 Berikut adalah Entity Relationship Diagram (ERD) untuk Sprint Flow:
 
